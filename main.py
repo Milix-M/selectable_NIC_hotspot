@@ -115,7 +115,7 @@ def main():
         if not is_wireless_adapter:
             continue
 
-        logger.info(f"\nProcessing Adapter: {description} ({setting_id})")
+        logger.info(f"Processing Adapter: {description} ({setting_id})")
 
         # ファイル名をサニタイズ (英数字とアンダースコア以外を置換)
         sanitized_description = re.sub(r"[^\w]", "_", description)
