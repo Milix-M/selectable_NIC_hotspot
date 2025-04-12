@@ -10,6 +10,31 @@ from logging import getLogger
 clr.AddReference("System.Net.NetworkInformation")
 from System.Net.NetworkInformation import NetworkInterface
 
+# ログ設定
+logging.basicConfig(
+        level=logging.INFO,  # ログレベルをINFOに設定
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",  # ログフォーマット
+    )
+logger = getLogger(__name__)
+
+# 依存ライブラリの確認 (wmi は Windows のみ)
+if platform.system() == "Windows":
+    try:
+        import wmi
+    except ImportError:
+        logger.error("Error: The 'WMI' package is required.")
+        logger.error("Please install it using: pip install WMI")
+        exit()  # wmiがない場合は終了
+
+
+class WirelessNIC:
+    def __init__(self, name: str, mac: str, id: str):
+        self.name = name
+        self.mac = mac
+        self.id = id
+
+    def __repr__(self):
+        return f"WirelessNIC(name={self.name}, mac={self.mac}, id={self.id})"
 
 def reverse_guid_bytes(guid_string):
     """
@@ -55,7 +80,7 @@ def reverse_guid_bytes(guid_string):
         return None
 
 
-def main():
+def get_wireless_adapters():
     # Windows以外では動作しないことを確認
     if platform.system() != "Windows":
         logger.error("This script requires Windows and the WMI module.")
@@ -79,14 +104,10 @@ def main():
         logger.error("No network adapters with IP enabled found or WMI query failed.")
         return
 
-    # 出力ディレクトリの準備
-    current_dir = os.getcwd()
-    output_directory = os.path.join(current_dir, "reg")
-    os.makedirs(output_directory, exist_ok=True)
-    logger.info(f"Output directory: {output_directory}")
-
     # ネットワークインターフェースの取得
     net = NetworkInterface.GetAllNetworkInterfaces()
+
+    wireless_adapters = []
 
     # 各アダプターを処理
     for adapter in adapter_configs:
@@ -117,13 +138,12 @@ def main():
 
         logger.info(f"Processing Adapter: {description} ({setting_id})")
 
-        # ファイル名をサニタイズ (英数字とアンダースコア以外を置換)
+        # サニタイズ (英数字とアンダースコア以外を置換)
         sanitized_description = re.sub(r"[^\w]", "_", description)
         # 連続するアンダースコアを1つにまとめる (任意)
         sanitized_description = re.sub(r"_+", "_", sanitized_description).strip("_")
         if not sanitized_description:  # サニタイズ後が空ならデフォルト名
             sanitized_description = f"adapter_{setting_id.replace('-', '')[:8]}"
-        filename = os.path.join(output_directory, f"{sanitized_description}.reg")
 
         # GUIDのバイト順を反転し、hex:形式の文字列を取得
         reversed_guid_hex = reverse_guid_bytes(setting_id)
@@ -134,46 +154,8 @@ def main():
             )
             continue
 
-        # レジストリファイルの内容を作成
-        # .regファイルの標準ヘッダーとWindows改行コード(\r\n)を使用
-        reg_content = f"""Windows Registry Editor Version 5.00\r\n
-\r\n[HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Services\\icssvc\\Settings]\r\n"PreferredPublicInterface"=hex:{reversed_guid_hex}\r\n"""
+        wireless_adapter = WirelessNIC(name=sanitized_description, mac=mac_address, id=reversed_guid_hex)
+        wireless_adapters.append(wireless_adapter)
 
-        logger.info(
-            f"Generating registry content:\n{reg_content.strip()}"
-        )  # 確認用に出力
+    return wireless_adapters
 
-        # ファイルに書き込み (UTF-16 LE with BOM が .reg ファイルで一般的)
-        try:
-            with open(filename, "w", encoding="utf-16le") as f:
-                # UTF-16 LE BOM (Byte Order Mark) を書き込む
-                # Python 3.x の 'utf-16le' は自動でBOMを付与しないため手動で追加
-                f.write("\ufeff")
-                # レジストリ内容を書き込む
-                f.write(reg_content)
-            logger.info(f"Successfully wrote registry file: {filename}")
-        except IOError as e:
-            logger.warning(f"Error writing file {filename}: {e}")
-        except Exception as e:
-            logger.warning(
-                f"An unexpected error occurred while writing file {filename}: {e}"
-            )
-
-
-if __name__ == "__main__":
-    # ログ設定を追加
-    logging.basicConfig(
-        level=logging.INFO,  # ログレベルをINFOに設定
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",  # ログフォーマット
-    )
-    logger = getLogger(__name__)
-    # 依存ライブラリの確認 (wmi は Windows のみ)
-    if platform.system() == "Windows":
-        try:
-            import wmi
-        except ImportError:
-            logger.error("Error: The 'WMI' package is required.")
-            logger.error("Please install it using: pip install WMI")
-            exit()  # wmiがない場合は終了
-    main()
-    logger.info("Script finished.")
