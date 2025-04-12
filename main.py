@@ -3,6 +3,9 @@ import os
 import re
 import uuid
 import platform
+import clr
+clr.AddReference("System.Net.NetworkInformation")
+from System.Net.NetworkInformation import NetworkInterface
 
 def reverse_guid_bytes(guid_string):
     """
@@ -63,6 +66,9 @@ def main():
     os.makedirs(output_directory, exist_ok=True)
     print(f"Output directory: {output_directory}")
 
+    # ネットワークインターフェースの取得
+    net = NetworkInterface.GetAllNetworkInterfaces()
+
     # 各アダプターを処理
     for adapter in adapter_configs:
         # 必須情報の存在確認
@@ -73,6 +79,19 @@ def main():
         if not description or not setting_id or not mac_address:
             # Description や SettingID、 MACAddress がない場合はスキップ
             print("  Skipping adapter due to missing information.")
+            continue
+
+
+        is_wireless_adapter = False
+
+        # Wireless80211 タイプのアダプターかどうかを確認
+        for i in range(len(net)):
+            if setting_id == net[i].Id and net[i].NetworkInterfaceType.ToString() == "Wireless80211":
+                is_wireless_adapter = True
+                break
+
+        # Wireless80211 タイプのアダプターのみを対象
+        if not is_wireless_adapter:
             continue
 
         print(f"\nProcessing Adapter: {description} ({setting_id})")
