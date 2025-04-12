@@ -36,6 +36,12 @@ class WirelessNIC:
     def __repr__(self):
         return f"WirelessNIC(name={self.name}, mac={self.mac}, id={self.id})"
 
+    def get_id_without_commas(self):
+        """
+        IDからカンマを除去した文字列を返す
+        """
+        return self.id.replace(",", "")
+
 def reverse_guid_bytes(guid_string):
     """
     GUID文字列を受け取り、指定されたルールでバイト順を反転させ、
