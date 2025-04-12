@@ -1,5 +1,5 @@
+from gui.nic_selector_app import NICSelectorApp
 import flet as ft
-from window import NICSelectorApp
 
 def main(page: ft.Page):
     app = NICSelectorApp(page)
