@@ -1,11 +1,11 @@
 import wmi
-import os
 import re
 import uuid
 import platform
 import clr
 import logging  # ログ設定のために必要
 from logging import getLogger
+import pythoncom
 
 clr.AddReference("System.Net.NetworkInformation")
 from System.Net.NetworkInformation import NetworkInterface
@@ -87,6 +87,7 @@ def reverse_guid_bytes(guid_string):
 
 
 def get_wireless_adapters():
+    pythoncom.CoInitialize()
     # Windows以外では動作しないことを確認
     if platform.system() != "Windows":
         logger.error("This script requires Windows and the WMI module.")
