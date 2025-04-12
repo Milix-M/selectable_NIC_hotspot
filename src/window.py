@@ -37,6 +37,9 @@ def main(page: ft.Page):
             set_adapter(option)
         update_selected_adapter_text(selected_adapter_text, page)
 
+    def __exit_program(e):
+        page.window.destroy()
+
     adapter_dropdown = create_adapter_dropdown()
 
     update_selected_adapter_text(selected_adapter_text, page)
@@ -71,7 +74,7 @@ def main(page: ft.Page):
                                 ft.ElevatedButton(
                                     "NICを変更", on_click=__change_adapter
                                 ),
-                                ft.ElevatedButton("終了"),
+                                ft.ElevatedButton("終了", on_click=__exit_program),
                             ],
                             alignment=ft.MainAxisAlignment.CENTER,
                         ),
