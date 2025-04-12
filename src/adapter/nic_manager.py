@@ -86,7 +86,7 @@ def reverse_guid_bytes(guid_string):
         return None
 
 
-def get_wireless_adapters():
+def get_wireless_adapters() -> list[WirelessNIC]:
     pythoncom.CoInitialize()
     # Windows以外では動作しないことを確認
     if platform.system() != "Windows":
