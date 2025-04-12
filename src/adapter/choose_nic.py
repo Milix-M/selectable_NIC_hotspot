@@ -24,9 +24,9 @@ def get_selected_adapter() -> WirelessNIC | None:
         return None
     # 取得した無線アダプタの中から、選択されたアダプタを探す
     else:
-        for i in range(len(wireless_adapters)):
-            if wireless_adapters[i].get_id_without_commas() == selected_adapter_id:
-                return wireless_adapters[i]
+        for adapter in wireless_adapters:
+            if adapter.get_id_without_commas() == selected_adapter_id:
+                return adapter
 
     # 選択されたアダプタが見つからなかった場合はNoneを返す
     return None
