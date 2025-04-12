@@ -86,12 +86,12 @@ def reverse_guid_bytes(guid_string):
         return None
 
 
-def get_wireless_adapters() -> list[WirelessNIC]:
+def get_wireless_adapters() -> list[WirelessNIC] | None:
     pythoncom.CoInitialize()
     # Windows以外では動作しないことを確認
     if platform.system() != "Windows":
         logger.error("This script requires Windows and the WMI module.")
-        return
+        return None
 
     # WMI接続を試みる
     try:
@@ -102,14 +102,14 @@ def get_wireless_adapters() -> list[WirelessNIC]:
     except wmi.x_wmi as e:
         logger.error(f"Error connecting to WMI or querying adapters: {e}")
         logger.error("Ensure the WMI service is running and you have permissions.")
-        return
+        return None
     except Exception as e:
         logger.error(f"An unexpected error occurred during WMI query: {e}")
-        return
+        return None
 
     if not adapter_configs:
         logger.error("No network adapters with IP enabled found or WMI query failed.")
-        return
+        return None
 
     # ネットワークインターフェースの取得
     net = NetworkInterface.GetAllNetworkInterfaces()
