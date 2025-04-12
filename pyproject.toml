@@ -5,6 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "logging>=0.4.9.6",
     "pythonnet>=3.0.5",
     "wmi>=1.5.1",
 ]
