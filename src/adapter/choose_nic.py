@@ -12,15 +12,13 @@ def get_selected_adapter():
 
         data, regtype = winreg.QueryValueEx(key, 'PreferredPublicInterface')
         selected_adapter_id = data.hex().upper()
-        print(data.hex().upper())
 
     if selected_adapter_id:
         wireless_adapters = get_wireless_adapters()
 
         for i in range(len(wireless_adapters)):
             if wireless_adapters[i].get_id_without_commas() == selected_adapter_id:
-                print(f"Selected adapter: {wireless_adapters[i].name}")
-                break
+                return wireless_adapters[i]
 
 def set_adapter(adapter: WirelessNIC):
     """
