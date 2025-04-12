@@ -3,18 +3,31 @@ import flet as ft
 from adapter.nic_manager import get_wireless_adapters, get_selected_adapter, set_adapter
 
 
+def update_selected_adapter_text(selected_adapter_text, page):
+    """
+    現在選択されているアダプタのテキストを更新する。
+    """
+    adapter = get_selected_adapter()
+    selected_adapter_text.value = adapter.name if adapter else "No adapter found"
+    page.update()
+
+
+def create_adapter_dropdown() -> ft.Dropdown:
+    """
+    アダプタ選択用のドロップダウンを作成する。
+    """
+    wireless_adapters = get_wireless_adapters()
+    options = [ft.dropdown.Option(text=adapter.name) for adapter in wireless_adapters]
+    return ft.Dropdown(options=options)
+
+
 def main(page: ft.Page):
     page.title = "MobileHotSpot NIC Selecter"  # タイトル
     page.window_width = 600  # 幅
     page.window_height = 300  # 高さ
 
-    # 現在のadapterを取得する
-    adapter = get_selected_adapter()
-
-    # 現在のadapterが取得できなかった場合はNoneを代入する
-    now_selected_adapter = adapter.name if adapter else "No adapter found"
     # 現在のadapterを表示するTextを作成する
-    selected_adapter_text = ft.Text(now_selected_adapter)
+    selected_adapter_text = ft.Text()
 
     def __change_adapter(e):
         selected_option = adapter_dropdown.value
@@ -22,28 +35,11 @@ def main(page: ft.Page):
         option = next((adapter for adapter in wireless_adapters if adapter.name == selected_option), None)
         if option:
             set_adapter(option)
+        update_selected_adapter_text(selected_adapter_text, page)
 
-        adapter = get_selected_adapter()
-        selected_adapter_text.value = adapter.name if adapter else "No adapter found"  # 現在のNICを更新
-        page.update()  # ページを更新
+    adapter_dropdown = create_adapter_dropdown()
 
-    def __adapter_choices() -> list[ft.dropdown.Option]:
-        """
-        Adapter選択DropDownの選択肢を取得しlistで返却する
-        """
-        wireless_adapters = get_wireless_adapters()
-
-        selectable_adapters = []
-
-        if wireless_adapters:
-            for adapter in wireless_adapters:
-                selectable_adapters.append(ft.dropdown.Option(text=adapter.name))
-
-        return selectable_adapters
-
-    adapter_dropdown = ft.Dropdown(
-        options=__adapter_choices(),
-    )
+    update_selected_adapter_text(selected_adapter_text, page)
 
     # 部品を配置する
     page.add(
