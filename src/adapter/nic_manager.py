@@ -88,129 +88,112 @@ def reverse_guid_bytes(guid_string):
         return None
 
 
-def get_wireless_adapters() -> list[WirelessNIC] | None:
+def sanitize_description(description: str, setting_id: str) -> str:
+    """
+    アダプタの説明をサニタイズし、適切な名前を生成する。
+    """
+    sanitized = re.sub(r"[^\w]", "_", description).strip("_")
+    return re.sub(r"_+", "_", sanitized) or f"adapter_{setting_id[:8]}"
+
+
+def get_reversed_guid(setting_id: str) -> str | None:
+    """
+    GUID のバイト順を反転し、hex:形式の文字列を返す。
+    """
+    return reverse_guid_bytes(setting_id)
+
+
+def get_wireless_adapters() -> list[WirelessNIC]:
+    """
+    Returns a list of wireless network adapters available on the system.
+    """
     pythoncom.CoInitialize()
-    # Windows以外では動作しないことを確認
     if platform.system() != "Windows":
         logger.error("This script requires Windows and the WMI module.")
-        return None
+        return []
 
-    # WMI接続を試みる
     try:
         c = wmi.WMI()
-        # IPが有効なアダプター設定を取得 (wmic nicconfig get に相当)
-        # SettingID が null でないものもフィルタリング
         adapter_configs = c.Win32_NetworkAdapterConfiguration()
     except wmi.x_wmi as e:
         logger.error(f"Error connecting to WMI or querying adapters: {e}")
-        logger.error("Ensure the WMI service is running and you have permissions.")
-        return None
+        return []
     except Exception as e:
-        logger.error(f"An unexpected error occurred during WMI query: {e}")
-        return None
+        logger.error(f"Unexpected error during WMI query: {e}")
+        return []
 
     if not adapter_configs:
-        logger.error("No network adapters with IP enabled found or WMI query failed.")
-        return None
+        logger.error("No network adapters with IP enabled found.")
+        return []
 
-    # ネットワークインターフェースの取得
     net = NetworkInterface.GetAllNetworkInterfaces()
-
     wireless_adapters = []
 
-    # 各アダプターを処理
     for adapter in adapter_configs:
-        # 必須情報の存在確認
         description = getattr(adapter, "Description", None)
         setting_id = getattr(adapter, "SettingID", None)
         mac_address = getattr(adapter, "MACAddress", "N/A")
 
         if not description or not setting_id or not mac_address:
-            # Description や SettingID、 MACAddress がない場合はスキップ
             logger.info("Skipping adapter due to missing information.")
             continue
 
-        is_wireless_adapter = False
+        is_wireless_adapter = any(
+            setting_id == net[i].Id and net[i].NetworkInterfaceType.ToString() == "Wireless80211"
+            for i in range(len(net))
+        )
 
-        # Wireless80211 タイプのアダプターかどうかを確認
-        for i in range(len(net)):
-            if (
-                setting_id == net[i].Id
-                and net[i].NetworkInterfaceType.ToString() == "Wireless80211"
-            ):
-                is_wireless_adapter = True
-                break
-
-        # Wireless80211 タイプのアダプターのみを対象
         if not is_wireless_adapter:
             continue
 
-        logger.info(f"Processing Adapter: {description} ({setting_id})")
-
-        # サニタイズ (英数字とアンダースコア以外を置換)
-        sanitized_description = re.sub(r"[^\w]", "_", description)
-        # 連続するアンダースコアを1つにまとめる (任意)
-        sanitized_description = re.sub(r"_+", "_", sanitized_description).strip("_")
-        if not sanitized_description:  # サニタイズ後が空ならデフォルト名
-            sanitized_description = f"adapter_{setting_id.replace('-', '')[:8]}"
-
-        # GUIDのバイト順を反転し、hex:形式の文字列を取得
-        reversed_guid_hex = reverse_guid_bytes(setting_id)
-
+        sanitized_description = sanitize_description(description, setting_id)
+        reversed_guid_hex = get_reversed_guid(setting_id)
         if reversed_guid_hex is None:
             logger.info(f"Skipping adapter {description} due to GUID processing error.")
             continue
 
-        wireless_adapter = WirelessNIC(
-            name=sanitized_description, mac=mac_address, id=reversed_guid_hex
-        )
-        wireless_adapters.append(wireless_adapter)
+        wireless_adapters.append(WirelessNIC(name=sanitized_description, mac=mac_address, id=reversed_guid_hex))
 
     return wireless_adapters
 
 
 def get_selected_adapter() -> WirelessNIC | None:
     """
-    Get the selected adapter from the registry.
+    Retrieves the currently selected wireless adapter from the registry.
     """
-    selected_adapter_id = None
-
-    # レジストリからPreferredPublicInterfaceの値を取得
-    with winreg.OpenKeyEx(
-        winreg.HKEY_LOCAL_MACHINE, r"SYSTEM\CurrentControlSet\Services\icssvc\Settings"
-    ) as key:
-        data, regtype = winreg.QueryValueEx(key, "PreferredPublicInterface")
-        selected_adapter_id = data.hex().upper()
-
-    # すべての無線アダプタを取得
-    wireless_adapters = get_wireless_adapters()
-
-    # 無線アダプタが取得できなかった場合はNoneで終了
-    if wireless_adapters is None:
+    try:
+        with winreg.OpenKeyEx(
+            winreg.HKEY_LOCAL_MACHINE, r"SYSTEM\CurrentControlSet\Services\icssvc\Settings"
+        ) as key:
+            data, _ = winreg.QueryValueEx(key, "PreferredPublicInterface")
+            selected_adapter_id = data.hex().upper()
+    except FileNotFoundError:
+        logger.error("Registry key for PreferredPublicInterface not found.")
         return None
-    # 取得した無線アダプタの中から、選択されたアダプタを探す
-    else:
-        for adapter in wireless_adapters:
-            if adapter.get_id_without_commas() == selected_adapter_id:
-                return adapter
+    except Exception as e:
+        logger.error(f"Error reading registry: {e}")
+        return None
 
-    # 選択されたアダプタが見つからなかった場合はNoneを返す
-    return None
+    wireless_adapters = get_wireless_adapters()
+    return next((adapter for adapter in wireless_adapters if adapter.get_id_without_commas() == selected_adapter_id), None)
 
 
 def set_adapter(adapter: WirelessNIC):
     """
-    Set the selected adapter in the registry.
+    Sets the given wireless adapter as the preferred public interface in the registry.
     """
-    with winreg.OpenKeyEx(
-        winreg.HKEY_LOCAL_MACHINE,
-        r"SYSTEM\CurrentControlSet\Services\icssvc\Settings",
-        access=winreg.KEY_SET_VALUE,
-    ) as key:
-        winreg.SetValueEx(
-            key,
-            "PreferredPublicInterface",
-            0,
-            winreg.REG_BINARY,
-            bytes.fromhex(adapter.get_id_without_commas()),
-        )
+    try:
+        with winreg.OpenKeyEx(
+            winreg.HKEY_LOCAL_MACHINE,
+            r"SYSTEM\CurrentControlSet\Services\icssvc\Settings",
+            access=winreg.KEY_SET_VALUE,
+        ) as key:
+            winreg.SetValueEx(
+                key,
+                "PreferredPublicInterface",
+                0,
+                winreg.REG_BINARY,
+                bytes.fromhex(adapter.get_id_without_commas()),
+            )
+    except Exception as e:
+        logger.error(f"Error setting registry value: {e}")
