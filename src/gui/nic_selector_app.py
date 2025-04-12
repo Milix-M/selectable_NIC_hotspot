@@ -1,7 +1,5 @@
 import flet as ft
-
 from adapter.nic_manager import get_wireless_adapters, get_selected_adapter, set_adapter
-
 
 class NICSelectorApp:
     def __init__(self, page: ft.Page):
@@ -85,5 +83,3 @@ class NICSelectorApp:
 
     def __exit_program(self, e):
         self.page.window.destroy()
-
-
