@@ -1,3 +1,4 @@
+import winreg
 import wmi
 import re
 import uuid
@@ -12,9 +13,9 @@ from System.Net.NetworkInformation import NetworkInterface
 
 # ログ設定
 logging.basicConfig(
-        level=logging.INFO,  # ログレベルをINFOに設定
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",  # ログフォーマット
-    )
+    level=logging.INFO,  # ログレベルをINFOに設定
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",  # ログフォーマット
+)
 logger = getLogger(__name__)
 
 # 依存ライブラリの確認 (wmi は Windows のみ)
@@ -41,6 +42,7 @@ class WirelessNIC:
         IDからカンマを除去した文字列を返す
         """
         return self.id.replace(",", "")
+
 
 def reverse_guid_bytes(guid_string):
     """
@@ -156,13 +158,59 @@ def get_wireless_adapters() -> list[WirelessNIC] | None:
         reversed_guid_hex = reverse_guid_bytes(setting_id)
 
         if reversed_guid_hex is None:
-            logger.info(
-                f"Skipping adapter {description} due to GUID processing error."
-            )
+            logger.info(f"Skipping adapter {description} due to GUID processing error.")
             continue
 
-        wireless_adapter = WirelessNIC(name=sanitized_description, mac=mac_address, id=reversed_guid_hex)
+        wireless_adapter = WirelessNIC(
+            name=sanitized_description, mac=mac_address, id=reversed_guid_hex
+        )
         wireless_adapters.append(wireless_adapter)
 
     return wireless_adapters
 
+
+def get_selected_adapter() -> WirelessNIC | None:
+    """
+    Get the selected adapter from the registry.
+    """
+    selected_adapter_id = None
+
+    # レジストリからPreferredPublicInterfaceの値を取得
+    with winreg.OpenKeyEx(
+        winreg.HKEY_LOCAL_MACHINE, r"SYSTEM\CurrentControlSet\Services\icssvc\Settings"
+    ) as key:
+        data, regtype = winreg.QueryValueEx(key, "PreferredPublicInterface")
+        selected_adapter_id = data.hex().upper()
+
+    # すべての無線アダプタを取得
+    wireless_adapters = get_wireless_adapters()
+
+    # 無線アダプタが取得できなかった場合はNoneで終了
+    if wireless_adapters is None:
+        return None
+    # 取得した無線アダプタの中から、選択されたアダプタを探す
+    else:
+        for adapter in wireless_adapters:
+            if adapter.get_id_without_commas() == selected_adapter_id:
+                return adapter
+
+    # 選択されたアダプタが見つからなかった場合はNoneを返す
+    return None
+
+
+def set_adapter(adapter: WirelessNIC):
+    """
+    Set the selected adapter in the registry.
+    """
+    with winreg.OpenKeyEx(
+        winreg.HKEY_LOCAL_MACHINE,
+        r"SYSTEM\CurrentControlSet\Services\icssvc\Settings",
+        access=winreg.KEY_SET_VALUE,
+    ) as key:
+        winreg.SetValueEx(
+            key,
+            "PreferredPublicInterface",
+            0,
+            winreg.REG_BINARY,
+            bytes.fromhex(adapter.get_id_without_commas()),
+        )
